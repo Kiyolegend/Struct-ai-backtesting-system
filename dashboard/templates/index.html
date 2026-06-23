@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STRUCT.ai Backtest Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --surface2: #1c2128;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --accent:   #58a6ff;
+  --green:    #3fb950;
+  --red:      #f85149;
+  --yellow:   #d29922;
+  --purple:   #bc8cff;
+  --orange:   #ffa657;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.header h1 { font-size: 16px; font-weight: 600; color: var(--text); }
+.header .tag {
+  font-size: 11px;
+  background: rgba(88,166,255,0.15);
+  color: var(--accent);
+  border: 1px solid rgba(88,166,255,0.3);
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+.header .db-status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.header .db-status.ok { color: var(--green); }
+
+/* ── Layout ── */
+.layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sidebar h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.section { display: flex; flex-direction: column; gap: 6px; }
+
+/* Strategy checkboxes */
+.strat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.strat-grid label {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: border-color 0.15s;
+}
+.strat-grid label:hover { border-color: var(--accent); }
+.strat-grid label.sc { color: var(--accent); }
+.strat-grid label.sw { color: var(--purple); }
+input[type=checkbox] { accent-color: var(--accent); }
+
+.toggle-row {
+  display: flex; gap: 6px; margin-bottom: 4px;
+}
+.toggle-row button {
+  flex: 1; padding: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 4px;
+  cursor: pointer; font-size: 11px;
+}
+.toggle-row button:hover { color: var(--text); border-color: var(--accent); }
+
+/* Symbol selector */
+.radio-group { display: flex; flex-direction: column; gap: 4px; }
+.radio-group label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer; font-size: 12px;
+}
+.radio-group label:hover { border-color: var(--accent); }
+input[type=radio] { accent-color: var(--accent); }
+
+/* Settings */
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 11px; color: var(--muted); }
+.field input[type=number], .field select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 100%;
+}
+.field input:focus, .field select:focus {
+  outline: none; border-color: var(--accent);
+}
+.toggle-field {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 0;
+}
+.toggle-field span { font-size: 12px; color: var(--muted); }
+.toggle {
+  width: 36px; height: 20px;
+  background: var(--border);
+  border-radius: 10px;
+  border: none; cursor: pointer;
+  position: relative; transition: background 0.2s;
+}
+.toggle.on { background: var(--accent); }
+.toggle::after {
+  content: "";
+  position: absolute;
+  width: 14px; height: 14px;
+  background: white;
+  border-radius: 50%;
+  top: 3px; left: 3px;
+  transition: left 0.2s;
+}
+.toggle.on::after { left: 19px; }
+
+/* Run button */
+.run-btn {
+  background: var(--accent);
+  color: #0d1117;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.15s;
+}
+.run-btn:hover { opacity: 0.85; }
+.run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.run-btn.running {
+  background: var(--yellow);
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.7 } }
+
+/* Collect buttons */
+.collect-row { display: flex; gap: 6px; }
+.collect-btn {
+  flex: 1;
+  padding: 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer; font-size: 12px;
+  transition: border-color 0.15s;
+}
+.collect-btn:hover { border-color: var(--green); color: var(--green); }
+.collect-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Main content ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tab bar */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.tab {
+  padding: 12px 18px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s;
+  position: relative;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab .live-dot {
+  display: none;
+  width: 6px; height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  position: absolute;
+  top: 10px; right: 6px;
+  animation: blink 1s infinite;
+}
+.tab .live-dot.show { display: block; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* Tab panels */
+.panel { display: none; flex: 1; overflow: auto; padding: 20px; }
+.panel.active { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Status panel ── */
+.info-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.info-card h4 { font-size: 12px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.kv-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: baseline; }
+.kv-grid .k { color: var(--muted); font-size: 12px; }
+.kv-grid .v { color: var(--text); font-size: 13px; font-weight: 500; }
+.kv-grid .v.ok { color: var(--green); }
+.kv-grid .v.warn { color: var(--yellow); }
+
+/* Recent results list */
+.result-list { display: flex; flex-direction: column; gap: 6px; }
+.result-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.result-item .name { font-size: 12px; color: var(--text); font-family: monospace; }
+.result-item .open-btn {
+  font-size: 11px; padding: 3px 10px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--accent); border-radius: 4px; cursor: pointer;
+}
+.result-item .open-btn:hover { background: rgba(88,166,255,0.1); }
+
+/* ── Progress panel ── */
+.progress-bar-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.progress-bar-label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+.progress-bar-track {
+  height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: var(--accent); border-radius: 3px;
+  width: 0%; transition: width 0.3s;
+}
+.progress-bar-fill.done { background: var(--green); }
+.progress-bar-fill.error { background: var(--red); }
+
+.log-wrap {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+}
+.log-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; color: var(--muted);
+}
+.log-header button {
+  background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px;
+}
+.log-header button:hover { color: var(--text); }
+.log-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  max-height: 520px;
+}
+.log-line { white-space: pre-wrap; word-break: break-all; }
+.log-line.ok    { color: var(--green); }
+.log-line.err   { color: var(--red); }
+.log-line.warn  { color: var(--yellow); }
+.log-line.head  { color: var(--accent); font-weight: 600; }
+
+.result-ready {
+  background: rgba(63,185,80,0.1);
+  border: 1px solid rgba(63,185,80,0.3);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: none;
+  align-items: center;
+  gap: 12px;
+}
+.result-ready.show { display: flex; }
+.result-ready .msg { flex: 1; color: var(--green); font-size: 13px; }
+.result-ready .open-results {
+  background: var(--green);
+  color: #0d1117;
+  border: none; border-radius: 6px;
+  padding: 8px 16px; font-size: 13px;
+  font-weight: 600; cursor: pointer;
+}
+.result-ready .open-results:hover { opacity: 0.85; }
+
+/* ── Equity Curve panel ── */
+.chart-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  flex-shrink: 0;
+}
+.stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.stat-val.pos { color: var(--green); }
+.stat-val.neg { color: var(--red); }
+
+.chart-container {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  position: relative;
+}
+.chart-container canvas {
+  flex: 1;
+}
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+.chart-empty .icon { font-size: 32px; opacity: 0.4; }
+.chart-empty.hidden { display: none; }
+
+.chart-legend-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--muted);
+}
+.legend-dot {
+  width: 10px; height: 3px; border-radius: 2px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .sidebar { width: 220px; }
+  .chart-stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+  </svg>
+  <h1>STRUCT.ai Backtest Dashboard</h1>
+  <span class="tag">v2</span>
+  <span class="db-status" id="dbStatus">Checking data…</span>
+</div>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+
+    <!-- Strategies -->
+    <div class="section">
+      <h3>Strategies</h3>
+      <div class="toggle-row">
+        <button onclick="selectAll()">All</button>
+        <button onclick="selectNone()">None</button>
+        <button onclick="selectScalp()">SC only</button>
+        <button onclick="selectSwing()">SW only</button>
+      </div>
+      <div class="strat-grid" id="stratGrid">
+        {% for s in strategies %}
+        <label class="{{ 'sc' if s.startswith('SC') else 'sw' }}">
+          <input type="checkbox" name="strategy" value="{{ s }}" checked>
+          {{ s }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Symbol -->
+    <div class="section">
+      <h3>Symbol</h3>
+      <div class="radio-group" id="symbolGroup">
+        {% for sym in symbols %}
+        <label>
+          <input type="radio" name="symbol" value="{{ sym }}" {% if loop.first %}checked{% endif %}>
+          {{ sym }}
+        </label>
+        {% endfor %}
+        <label style="color: var(--orange)">
+          <input type="radio" name="symbol" value="__portfolio__">
+          Portfolio (all 5 pairs)
+        </label>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="section">
+      <h3>Settings</h3>
+      <div class="field">
+        <label>Lot size</label>
+        <input type="number" id="lotSize" value="" step="0.01" min="0.01" max="1.0" placeholder="auto">
+      </div>
+      <div class="field">
+        <label>Walk-forward split (IS%)</label>
+        <input type="number" id="wfSplit" value="70" min="50" max="90" step="5">
+      </div>
+      <div class="field">
+        <label>Monte Carlo iterations</label>
+        <input type="number" id="mcIter" value="1000" min="100" max="5000" step="100">
+      </div>
+      <div class="toggle-field">
+        <span>Walk-forward validation</span>
+        <button class="toggle on" id="toggleWF" onclick="toggleBtn(this)"></button>
+      </div>
+      <div class="toggle-field">
+        <span>Monte Carlo simulation</span>
+        <button class="toggle on" id="toggleMC" onclick="toggleBtn(this)"></button>
+      </div>
+    </div>
+
+    <!-- Run -->
+    <button class="run-btn" id="runBtn" onclick="runBacktest()">
+      ▶ Run Backtest
+    </button>
+
+    <!-- Data collection -->
+    <div class="section">
+      <h3>Data Collection</h3>
+      <div class="collect-row">
+        <button class="collect-btn" id="collectMT5Btn" onclick="collectData('mt5')">
+          📡 Collect MT5
+        </button>
+        <button class="collect-btn" id="collectYFBtn" onclick="collectData('yfinance')">
+          🌐 Yahoo Finance
+        </button>
+      </div>
+      <div class="collect-row">
+        <button class="collect-btn" id="refreshMT5Btn" onclick="collectData('mt5', true)">
+          🔄 Refresh MT5
+        </button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+    <nav class="tabs">
+      <div class="tab active" onclick="showTab('status', this)">Status</div>
+      <div class="tab" onclick="showTab('progress', this)" id="tabProgress">Progress</div>
+      <div class="tab" onclick="showTab('chart', this)" id="tabChart">
+        📈 Equity Curve
+        <span class="live-dot" id="chartLiveDot"></span>
+      </div>
+    </nav>
+
+    <!-- Status tab -->
+    <div class="panel active" id="panel-status">
+      <div class="info-card">
+        <h4>Data</h4>
+        <div class="kv-grid" id="dataInfo">
+          <span class="k">Database</span><span class="v warn" id="dbInfo">Checking…</span>
+          <span class="k">Size</span><span class="v" id="dbSize">—</span>
+        </div>
+      </div>
+      <div class="info-card">
+        <h4>Recent Results</h4>
+        <div class="result-list" id="recentList">
+          <span style="color:var(--muted);font-size:12px">No results yet — run a backtest first.</span>
+        </div>
+      </div>
+      <div class="info-card">
+        <h4>Quick Guide</h4>
+        <div style="color:var(--muted);font-size:12px;line-height:1.8">
+          1. Collect data first (sidebar → Data Collection)<br>
+          2. Select strategies and symbol/portfolio<br>
+          3. Click <strong style="color:var(--accent)">Run Backtest</strong><br>
+          4. Watch live progress + 📈 Equity Curve fills in real-time<br>
+          5. When done, open Results Viewer for full report<br><br>
+          <strong style="color:var(--text)">Tip:</strong> Use <em>Refresh MT5</em> to top-up daily 
+          without re-downloading everything.
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress tab -->
+    <div class="panel" id="panel-progress">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-label">
+          <span id="progressLabel">Idle</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+      </div>
+
+      <div class="result-ready" id="resultReady">
+        <span class="msg">✓ Backtest complete — results ready</span>
+        <button class="open-results" id="openResultsBtn" onclick="openResults()">
+          Open Results Viewer →
+        </button>
+      </div>
+
+      <div class="log-wrap">
+        <div class="log-header">
+          <span>Output log</span>
+          <button onclick="clearLog()">Clear</button>
+        </div>
+        <div class="log-body" id="logBody"></div>
+      </div>
+    </div>
+
+    <!-- Equity Curve tab -->
+    <div class="panel" id="panel-chart">
+
+      <!-- Stats row -->
+      <div class="chart-stats-row">
+        <div class="stat-box">
+          <div class="stat-label">Cum P&amp;L</div>
+          <div class="stat-val" id="statPnl">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Peak</div>
+          <div class="stat-val pos" id="statPeak">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Max Drawdown</div>
+          <div class="stat-val" id="statDD">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Trades</div>
+          <div class="stat-val" id="statTrades">—</div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="chart-legend-row">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#58a6ff"></div>
+          Full Run
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#ffa657"></div>
+          In-Sample (IS)
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#3fb950"></div>
+          Out-of-Sample (OOS)
+        </div>
+      </div>
+
+      <!-- Chart canvas -->
+      <div class="chart-container" id="chartContainer">
+        <canvas id="equityCanvas"></canvas>
+        <div class="chart-empty" id="chartEmpty">
+          <div class="icon">📈</div>
+          <div>Equity curve will appear here during a backtest run</div>
+          <div style="font-size:11px">Click <strong>▶ Run Backtest</strong> in the sidebar to start</div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentJobId      = null;
+let currentResultHtml = null;
+let eventSource       = null;
+let isRunning         = false;
+let progressLines     = 0;
+
+// ── Equity chart state ────────────────────────────────────────────────────────
+let equityChart  = null;
+let _chartPeak   = 0;
+let _chartTrough = 0;
+let _firstPoint  = true;
+
+const SEG_COLORS = {
+  FULL: '#58a6ff',
+  IS:   '#ffa657',
+  OOS:  '#3fb950',
+};
+
+// ── Startup ───────────────────────────────────────────────────────────────────
+window.addEventListener("load", () => {
+  loadStatus();
+  setInterval(loadStatus, 15000);
+  initChart();
+});
+
+async function loadStatus() {
+  try {
+    const r = await fetch("/api/status");
+    const d = await r.json();
+    const dbEl = document.getElementById("dbInfo");
+    const szEl = document.getElementById("dbSize");
+    const hdEl = document.getElementById("dbStatus");
+
+    if (d.has_data) {
+      dbEl.textContent = "Ready";
+      dbEl.className = "v ok";
+      szEl.textContent = `${d.db_size_mb} MB`;
+      hdEl.textContent = `DB: ${d.db_size_mb} MB`;
+      hdEl.className = "db-status ok";
+    } else {
+      dbEl.textContent = "No data — collect first";
+      dbEl.className = "v warn";
+      szEl.textContent = "—";
+      hdEl.textContent = "No market data";
+      hdEl.className = "db-status";
+    }
+
+    const list = document.getElementById("recentList");
+    if (d.recent && d.recent.length) {
+      list.innerHTML = d.recent.map(r => `
+        <div class="result-item">
+          <span class="name">${r.name}</span>
+          <button class="open-btn" onclick="openFile('${r.html.replace(/\\/g,'/')}')">Open</button>
+        </div>`).join("");
+    }
+  } catch(e) {/* ignore */}
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(id, el) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById("panel-" + id).classList.add("active");
+  // Resize chart when its tab becomes visible
+  if (id === "chart" && equityChart) {
+    equityChart.resize();
+    document.getElementById("chartLiveDot").classList.remove("show");
+  }
+}
+
+function activateProgressTab() {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("tabProgress").classList.add("active");
+  document.getElementById("panel-progress").classList.add("active");
+}
+
+// ── Strategy toggles ─────────────────────────────────────────────────────────
+function selectAll()  { check(true); }
+function selectNone() { check(false); }
+function selectScalp(){ checkFn(c => c.value.startsWith("SC")); }
+function selectSwing(){ checkFn(c => c.value.startsWith("SW")); }
+function check(v) {
+  document.querySelectorAll("input[name=strategy]").forEach(c => c.checked = v);
+}
+function checkFn(fn) {
+  document.querySelectorAll("input[name=strategy]").forEach(c => c.checked = fn(c));
+}
+
+// ── Toggle buttons ────────────────────────────────────────────────────────────
+function toggleBtn(el) {
+  el.classList.toggle("on");
+}
+
+// ── Collect data ─────────────────────────────────────────────────────────────
+async function collectData(source, refresh=false) {
+  if (isRunning) return;
+  const btn = document.getElementById(source === "mt5" ? (refresh ? "refreshMT5Btn" : "collectMT5Btn") : "collectYFBtn");
+  btn.disabled = true;
+  btn.textContent = "Collecting…";
+
+  activateProgressTab();
+  clearLog();
+  setProgress(0, "Collecting data…");
+  document.getElementById("resultReady").classList.remove("show");
+
+  try {
+    const r = await fetch("/api/collect", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({source, refresh}),
+    });
+    const d = await r.json();
+    startStream(d.job_id, () => {
+      btn.disabled = false;
+      btn.textContent = source === "mt5" ? (refresh ? "🔄 Refresh MT5" : "📡 Collect MT5") : "🌐 Yahoo Finance";
+      setProgress(100, "Collection complete", "done");
+      loadStatus();
+    });
+  } catch(e) {
+    logLine("ERROR: " + e.message, "err");
+    btn.disabled = false;
+  }
+}
+
+// ── Run backtest ──────────────────────────────────────────────────────────────
+async function runBacktest() {
+  if (isRunning) return;
+
+  const strategies = [...document.querySelectorAll("input[name=strategy]:checked")]
+    .map(c => c.value);
+  if (!strategies.length) {
+    alert("Select at least one strategy.");
+    return;
+  }
+
+  const symRadio = document.querySelector("input[name=symbol]:checked");
+  const symbol   = symRadio ? symRadio.value : "USD/JPY";
+  const portfolio = symbol === "__portfolio__";
+
+  const lot     = parseFloat(document.getElementById("lotSize").value) || null;
+  const wfSplitRaw = parseInt(document.getElementById("wfSplit").value, 10);
+  // Fix: guard against decimal typos (e.g. "0.70" → parseInt gives 0)
+  // Input expects 50–90 (percent form), not 0–1 fraction form.
+  if (isNaN(wfSplitRaw) || wfSplitRaw < 50 || wfSplitRaw > 90) {
+    alert("Walk-forward split must be between 50 and 90 (e.g. enter 70 for 70%).");
+    return;
+  }
+  const wfSplit = wfSplitRaw / 100;
+  const mcIter  = parseInt(document.getElementById("mcIter").value, 10);
+  const wf      = document.getElementById("toggleWF").classList.contains("on");
+  const mc      = document.getElementById("toggleMC").classList.contains("on");
+
+  const body = {
+    strategies,
+    symbol:        portfolio ? "USD/JPY" : symbol,
+    portfolio,
+    lot,
+    walk_forward:  wf,
+    monte_carlo:   mc,
+    mc_iter:       mcIter,
+    wf_split:      wfSplit,
+  };
+
+  setRunning(true);
+  activateProgressTab();
+  clearLog();
+  clearChart();
+  setProgress(0, "Starting…");
+  document.getElementById("resultReady").classList.remove("show");
+  currentResultHtml = null;
+
+  try {
+    const r = await fetch("/api/run", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    startStream(d.job_id, (html) => {
+      setRunning(false);
+      setProgress(100, "Done", "done");
+      currentResultHtml = html;
+      if (html) {
+        document.getElementById("resultReady").classList.add("show");
+      }
+      loadStatus();
+    });
+  } catch(e) {
+    logLine("ERROR: " + e.message, "err");
+    setRunning(false);
+  }
+}
+
+// ── SSE stream ────────────────────────────────────────────────────────────────
+function startStream(jobId, onFinish) {
+  currentJobId = jobId;
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource(`/api/stream/${jobId}`);
+
+  eventSource.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+
+    if (msg.type === "ping") return;
+
+    if (msg.type === "line") {
+      const line = msg.content;
+      appendLog(line);
+      updateProgress(line);
+    }
+
+    if (msg.type === "chart") {
+      addChartPoint(msg.content);
+    }
+
+    if (msg.type === "error") {
+      logLine("ERROR: " + msg.content, "err");
+      setProgress(100, "Error", "error");
+    }
+
+    if (msg.type === "finished") {
+      eventSource.close();
+      onFinish(msg.result_html);
+    }
+  };
+
+  eventSource.onerror = () => {
+    eventSource.close();
+    logLine("Connection closed.", "warn");
+    setRunning(false);
+  };
+}
+
+// ── Progress parsing ──────────────────────────────────────────────────────────
+function updateProgress(line) {
+  const m = line.match(/\[(\w+)\]\s+([\d.]+)%/);
+  if (m) {
+    const pct   = parseFloat(m[2]);
+    const label = m[1];
+    const dateM = line.match(/\d{4}-\d{2}-\d{2}/);
+    const datePart = dateM ? ` — ${dateM[0]}` : "";
+    setProgress(pct, `[${label}] ${pct.toFixed(1)}%${datePart}`);
+  }
+  if (line.includes("Collection complete")) {
+    setProgress(100, "Collection complete", "done");
+  }
+  if (line.includes("FULL RUN COMPLETE") || line.includes("PORTFOLIO SUMMARY")) {
+    setProgress(100, "Analysis complete", "done");
+  }
+}
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+function appendLog(line) {
+  const body = document.getElementById("logBody");
+  let cls = "log-line";
+  if (line.startsWith("===") || line.startsWith("---") || line.includes("Backtest:")) cls += " head";
+  else if (line.includes("[OK]") || line.includes("loaded OK") || line.includes("stored")) cls += " ok";
+  else if (line.includes("[ERROR]") || line.includes("Error") || line.includes("ERROR")) cls += " err";
+  else if (line.includes("[WARN]") || line.includes("[INFO]")) cls += " warn";
+
+  const div = document.createElement("div");
+  div.className = cls;
+  div.textContent = line;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+  progressLines++;
+}
+
+function logLine(text, cls = "") {
+  appendLog(text);
+}
+
+function clearLog() {
+  document.getElementById("logBody").innerHTML = "";
+  progressLines = 0;
+}
+
+// ── Progress bar ──────────────────────────────────────────────────────────────
+function setProgress(pct, label = "", state = "") {
+  const fill  = document.getElementById("progressFill");
+  const lbl   = document.getElementById("progressLabel");
+  const pctEl = document.getElementById("progressPct");
+  fill.style.width = `${Math.min(pct, 100)}%`;
+  fill.className   = "progress-bar-fill" + (state ? " " + state : "");
+  lbl.textContent  = label || `${pct.toFixed(0)}%`;
+  pctEl.textContent = `${Math.min(pct, 100).toFixed(1)}%`;
+}
+
+// ── Running state ─────────────────────────────────────────────────────────────
+function setRunning(v) {
+  isRunning = v;
+  const btn = document.getElementById("runBtn");
+  btn.disabled = v;
+  btn.textContent = v ? "⏳ Running…" : "▶ Run Backtest";
+  btn.className = "run-btn" + (v ? " running" : "");
+  document.querySelectorAll(".collect-btn").forEach(b => b.disabled = v);
+}
+
+// ── Open results ──────────────────────────────────────────────────────────────
+async function openResults() {
+  if (!currentResultHtml) return;
+  await fetch("/api/open_viewer", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({path: currentResultHtml}),
+  });
+}
+
+async function openFile(path) {
+  await fetch("/api/open_viewer", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({path}),
+  });
+}
+
+// ── Equity Curve Chart ────────────────────────────────────────────────────────
+function initChart() {
+  if (typeof Chart === "undefined") return;  // CDN not loaded yet
+
+  const canvas = document.getElementById("equityCanvas");
+  if (!canvas) return;
+
+  equityChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "Full Run",
+          data: [],
+          borderColor: SEG_COLORS.FULL,
+          backgroundColor: "rgba(88,166,255,0.07)",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2,
+        },
+        {
+          label: "In-Sample (IS)",
+          data: [],
+          borderColor: SEG_COLORS.IS,
+          backgroundColor: "rgba(255,166,87,0.07)",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2,
+        },
+        {
+          label: "Out-of-Sample (OOS)",
+          data: [],
+          borderColor: SEG_COLORS.OOS,
+          backgroundColor: "rgba(63,185,80,0.07)",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          type: "category",
+          ticks: {
+            color: "#8b949e",
+            maxTicksLimit: 10,
+            maxRotation: 0,
+            font: { size: 10 },
+          },
+          grid: { color: "rgba(48,54,61,0.6)" },
+        },
+        y: {
+          ticks: {
+            color: "#8b949e",
+            font: { size: 10 },
+            callback: v => "$" + (v >= 0 ? "+" : "") + v.toFixed(2),
+          },
+          grid: { color: "rgba(48,54,61,0.6)" },
+        },
+      },
+      plugins: {
+        legend: { display: false },   // using custom legend row above canvas
+        tooltip: {
+          backgroundColor: "#1c2128",
+          borderColor: "#30363d",
+          borderWidth: 1,
+          titleColor: "#8b949e",
+          bodyColor: "#e6edf3",
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return ` ${ctx.dataset.label}: $${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function clearChart() {
+  _chartPeak   = 0;
+  _chartTrough = 0;
+  _firstPoint  = true;
+  updateChartStats(null, null, null, null);
+  document.getElementById("chartEmpty").classList.remove("hidden");
+  document.getElementById("chartLiveDot").classList.remove("show");
+  if (equityChart) {
+    equityChart.data.datasets.forEach(ds => { ds.data = []; });
+    equityChart.update("none");
+  }
+}
+
+function addChartPoint(d) {
+  // d = { segment: "FULL"|"IS"|"OOS", pct, date, pnl, trades }
+  if (!equityChart) initChart();
+  if (!equityChart) return;
+
+  const dsIndex = d.segment === "FULL" ? 0 : d.segment === "IS" ? 1 : 2;
+
+  equityChart.data.datasets[dsIndex].data.push({ x: d.date, y: d.pnl });
+  equityChart.update("none");
+
+  // Hide empty-state overlay once we have real data
+  if (_firstPoint) {
+    _firstPoint = false;
+    document.getElementById("chartEmpty").classList.add("hidden");
+    // Show live dot on the chart tab
+    document.getElementById("chartLiveDot").classList.add("show");
+  }
+
+  // Track peak and max drawdown
+  if (_firstPoint === false) {
+    _chartPeak   = Math.max(_chartPeak, d.pnl);
+    if (d.pnl < _chartTrough) _chartTrough = d.pnl;
+  }
+
+  const maxDD = _chartPeak > 0 ? Math.min(0, _chartTrough - _chartPeak) : _chartTrough;
+
+  updateChartStats(d.pnl, _chartPeak, maxDD, d.trades);
+}
+
+function updateChartStats(pnl, peak, dd, trades) {
+  const pnlEl  = document.getElementById("statPnl");
+  const peakEl = document.getElementById("statPeak");
+  const ddEl   = document.getElementById("statDD");
+  const trEl   = document.getElementById("statTrades");
+
+  if (pnl === null) {
+    pnlEl.textContent  = "—"; pnlEl.className  = "stat-val";
+    peakEl.textContent = "—"; peakEl.className = "stat-val pos";
+    ddEl.textContent   = "—"; ddEl.className   = "stat-val";
+    trEl.textContent   = "—";
+    return;
+  }
+
+  pnlEl.textContent  = `$${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}`;
+  pnlEl.className    = "stat-val" + (pnl > 0 ? " pos" : pnl < 0 ? " neg" : "");
+
+  peakEl.textContent = peak > 0 ? `$+${peak.toFixed(2)}` : "—";
+  peakEl.className   = "stat-val pos";
+
+  ddEl.textContent   = dd < 0 ? `$${dd.toFixed(2)}` : "—";
+  ddEl.className     = "stat-val" + (dd < 0 ? " neg" : "");
+
+  trEl.textContent   = trades != null ? trades : "—";
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>struct-ai-backtest Results Viewer v2</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --border: #30363d; --text: #e6edf3; --text2: #8b949e;
+    --green: #3fb950; --red: #f85149; --blue: #58a6ff;
+    --yellow: #d29922; --purple: #bc8cff; --orange: #ffa657;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+
+  .header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 20px; font-weight: 700; color: var(--blue); }
+  .header .subtitle { color: var(--text2); font-size: 13px; }
+  .header-left { flex: 1; }
+  .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .load-btn { background: var(--blue); color: #000; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .load-btn:hover { opacity: 0.85; }
+  .badge-portfolio { background: rgba(88,166,255,0.15); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); border-radius: 12px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .kpi-card .label { color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .kpi-card .value { font-size: 24px; font-weight: 700; }
+  .kpi-card .value.pos { color: var(--green); }
+  .kpi-card .value.neg { color: var(--red); }
+  .kpi-card .value.neutral { color: var(--blue); }
+
+  .section { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+  .section-header { padding: 14px 20px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  .section-header-left { display: flex; align-items: center; gap: 8px; }
+  .section-body { padding: 20px; }
+
+  /* Tabs */
+  .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; }
+  .tab { padding: 10px 16px; cursor: pointer; color: var(--text2); font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+  .tab-panel { display: none; padding: 20px; }
+  .tab-panel.active { display: block; }
+
+  /* Equity canvas */
+  .equity-wrap { position: relative; }
+  canvas { width: 100%; display: block; }
+
+  /* Legend */
+  .curve-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+  .legend-swatch { width: 16px; height: 3px; border-radius: 2px; }
+  .legend-swatch.dashed { border-top: 2px dashed; height: 0; }
+
+  /* Walk-forward */
+  .wf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .wf-panel { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .wf-panel h3 { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+  .wf-panel h3.is { color: var(--blue); }
+  .wf-panel h3.oos { color: var(--purple); }
+  .wf-stat { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .wf-stat:last-child { border-bottom: none; }
+  .wf-stat .k { color: var(--text2); }
+
+  /* Monte Carlo */
+  .mc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .mc-stat { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .mc-stat .label { color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+  .mc-stat .value { font-size: 18px; font-weight: 700; }
+
+  /* Per-pair */
+  .pair-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .pair-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .pair-card .pair-name { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+  .pair-stat { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
+  .pair-stat .pk { color: var(--text2); }
+
+  /* Strategy breakdown */
+  .per-strat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .strat-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .strat-card .code { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+  .strat-card .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .strat-card .m-label { color: var(--text2); font-size: 11px; }
+  .strat-card .m-value { font-size: 13px; font-weight: 600; }
+  .mini-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; }
+  .mini-bar-fill { height: 100%; border-radius: 2px; background: var(--green); }
+
+  /* Trade table */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 10px 12px; color: var(--text2); font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.4px; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg3); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .tag.tp  { background: rgba(63,185,80,0.15); color: var(--green); }
+  .tag.sl  { background: rgba(248,81,73,0.15); color: var(--red); }
+  .tag.open{ background: rgba(88,166,255,0.15); color: var(--blue); }
+  .tag.buy { background: rgba(63,185,80,0.15); color: var(--green); }
+  .tag.sell{ background: rgba(248,81,73,0.15); color: var(--red); }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .filter-bar label { color: var(--text2); font-size: 12px; }
+  .filter-bar select, .filter-bar input { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 5px 10px; font-size: 13px; }
+  .filter-bar button { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); border-radius: 5px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .filter-bar button:hover { border-color: var(--blue); color: var(--blue); }
+
+  .pagination { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 14px; }
+  .pagination button { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); padding: 5px 12px; border-radius: 5px; cursor: pointer; }
+  .pagination button.active { border-color: var(--blue); color: var(--blue); }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .pagination span { color: var(--text2); font-size: 13px; }
+
+  .empty-state { text-align: center; color: var(--text2); padding: 60px 20px; }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 15px; }
+  .empty-state .hint { font-size: 12px; margin-top: 8px; color: #484f58; }
+
+  .strat-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: rgba(88,166,255,0.12); color: var(--blue); }
+  .strat-badge.sw { background: rgba(188,140,255,0.12); color: var(--purple); }
+
+  @media (max-width: 600px) {
+    .wf-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>struct-ai-backtest <span style="font-size:13px;color:var(--text2);font-weight:400">v2</span></h1>
+    <div class="subtitle" id="run-subtitle">Load a results JSON to view</div>
+  </div>
+  <div class="header-actions">
+    <span id="portfolio-badge" style="display:none" class="badge-portfolio">🌐 Portfolio</span>
+    <button class="load-btn" onclick="loadFile()">📂 Load Results JSON</button>
+  </div>
+</div>
+
+<div class="container" id="main-container">
+  <div class="empty-state">
+    <div class="icon">📊</div>
+    <p>No results loaded yet.</p>
+    <div class="hint">Click "Load Results JSON" above, or open an auto-generated HTML file from results\</div>
+  </div>
+</div>
+
+<input type="file" id="file-input" accept=".json,.html" style="display:none" onchange="onFileChange(event)">
+
+<script>
+/* RESULTS_DATA_PLACEHOLDER */
+
+// ── Globals ───────────────────────────────────────────────────────────────────
+let _data = null;
+let _filteredTrades = [];
+let _page = 1;
+const PAGE_SIZE = 50;
+
+// Pair colours for multi-pair chart
+const PAIR_COLORS = {
+  "USD/JPY": "#58a6ff",
+  "EUR/USD": "#3fb950",
+  "GBP/USD": "#bc8cff",
+  "AUD/USD": "#ffa657",
+  "USD/CHF": "#f85149",
+};
+const FALLBACK_COLORS = ["#58a6ff","#3fb950","#bc8cff","#ffa657","#f85149","#d29922","#39d353"];
+
+// ── File loading ─────────────────────────────────────────────────────────────
+function loadFile() { document.getElementById('file-input').click(); }
+function onFileChange(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try { _data = JSON.parse(e.target.result); render(_data); }
+    catch(err) { alert('Could not parse file: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+if (typeof RESULTS_DATA !== 'undefined') {
+  _data = RESULTS_DATA;
+  document.addEventListener('DOMContentLoaded', () => render(_data));
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(n, prefix='') {
+  if (n == null) return '—';
+  const sign = n >= 0 ? '+' : '';
+  return prefix + sign + n.toFixed(2);
+}
+function pct(n) { return n != null ? n.toFixed(1) + '%' : '—'; }
+function ts2date(ts) { if (!ts) return '—'; return new Date(ts * 1000).toISOString().slice(0,10); }
+function ts2month(ts) { if (!ts) return '—'; return new Date(ts * 1000).toISOString().slice(0,7); }
+
+// ── Main render ───────────────────────────────────────────────────────────────
+function render(d) {
+  const isPortfolio = d.mode === 'portfolio';
+  const strategies  = d.strategies || [];
+  const sym         = isPortfolio ? (d.symbols || []).join(', ') : (d.symbol || '—');
+
+  document.getElementById('run-subtitle').textContent =
+    `${sym}  |  ${strategies.join(', ')}  |  ${d.total_trades} trades`;
+  document.getElementById('portfolio-badge').style.display = isPortfolio ? '' : 'none';
+
+  document.getElementById('main-container').innerHTML = `
+    ${renderKPIs(d)}
+    ${renderEquitySection(d)}
+    ${isPortfolio ? renderPerPair(d) : ''}
+    ${d.walk_forward  ? renderWalkForward(d.walk_forward) : ''}
+    ${d.monte_carlo   ? renderMonteCarlo(d.monte_carlo)   : ''}
+    ${renderPerStrategy(d)}
+    ${renderTradeSection(d)}
+  `;
+
+  // Draw charts
+  if (isPortfolio) {
+    drawPortfolioEquity(d);
+  } else {
+    drawMainEquity(d);
+  }
+
+  buildTradeTable(d.trades || []);
+  initTabs();
+}
+
+// ── KPI cards ─────────────────────────────────────────────────────────────────
+function renderKPIs(d) {
+  const pnl = d.total_pnl || 0;
+  const wr  = d.win_rate  || 0;
+  const dd  = d.max_drawdown  || 0;
+  const pf  = d.profit_factor || 0;
+  const rr  = d.avg_rr        || 0;
+  const wf  = d.walk_forward;
+  const mc  = d.monte_carlo;
+
+  const cards = [
+    { label:'Total P&L',      value: fmt(pnl,'$'),  cls: pnl>=0?'pos':'neg' },
+    { label:'Win Rate',       value: pct(wr),        cls: wr>=50?'pos':'neg' },
+    { label:'Total Trades',   value: d.total_trades||0, cls:'neutral' },
+    { label:'Wins / Losses',  value: `${d.wins||0} / ${d.losses||0}`, cls:'neutral' },
+    { label:'Avg R:R',        value: rr.toFixed(2),  cls:'neutral' },
+    { label:'Profit Factor',  value: pf.toFixed(2),  cls: pf>=1?'pos':'neg' },
+    { label:'Max Drawdown',   value: fmt(-(dd||0),'$'), cls:'neg' },
+  ];
+  if (wf) {
+    const o = wf.out_of_sample;
+    cards.push({ label:'OOS P&L',      value: fmt(o.total_pnl,'$'), cls: o.total_pnl>=0?'pos':'neg' });
+    cards.push({ label:'OOS Win Rate', value: pct(o.win_rate),      cls: o.win_rate>=50?'pos':'neg' });
+  }
+  if (mc) {
+    cards.push({ label:'MC P(+)',   value: mc.prob_positive+'%', cls: mc.prob_positive>=50?'pos':'neg' });
+    cards.push({ label:'MC p50 PnL',value: fmt(mc.final_p50,'$'), cls: mc.final_p50>=0?'pos':'neg' });
+  }
+  return `<div class="kpi-grid">${cards.map(c=>`
+    <div class="kpi-card">
+      <div class="label">${c.label}</div>
+      <div class="value ${c.cls}">${c.value}</div>
+    </div>`).join('')}</div>`;
+}
+
+// ── Equity section (tabbed) ───────────────────────────────────────────────────
+function renderEquitySection(d) {
+  const hasMC  = !!d.monte_carlo;
+  const hasWF  = !!d.walk_forward;
+  const isPort = d.mode === 'portfolio';
+  const tabs   = ['Full Run'];
+  if (hasWF)  tabs.push('Walk-Forward');
+  if (hasMC)  tabs.push('Monte Carlo');
+  if (isPort) tabs.push('Per-Pair');
+
+  const tabHtml = tabs.map((t,i) =>
+    `<div class="tab${i===0?' active':''}" onclick="switchTab(this,'eq-panel-${i}')">${t}</div>`
+  ).join('');
+
+  let panels = `
+    <div class="tab-panel active" id="eq-panel-0">
+      <div class="equity-wrap">
+        <div class="curve-legend" id="eq-legend-0"></div>
+        <canvas id="equity-canvas-full"></canvas>
+      </div>
+    </div>`;
+
+  let pi = 1;
+  if (hasWF) {
+    panels += `
+    <div class="tab-panel" id="eq-panel-${pi}">
+      <div id="wf-equity-wrap">
+        <canvas id="equity-canvas-wf"></canvas>
+      </div>
+    </div>`;
+    pi++;
+  }
+  if (hasMC) {
+    panels += `
+    <div class="tab-panel" id="eq-panel-${pi}">
+      <div class="curve-legend" id="mc-legend"></div>
+      <canvas id="equity-canvas-mc"></canvas>
+    </div>`;
+    pi++;
+  }
+  if (isPort) {
+    panels += `
+    <div class="tab-panel" id="eq-panel-${pi}">
+      <div class="curve-legend" id="pair-legend"></div>
+      <canvas id="equity-canvas-pair"></canvas>
+    </div>`;
+  }
+
+  return `<div class="section">
+    <div class="section-header"><div class="section-header-left">📈 Equity Curves</div></div>
+    <div class="tab-bar">${tabHtml}</div>
+    ${panels}
+  </div>`;
+}
+
+function initTabs() {
+  // Tabs set up via onclick; draw deferred charts on first activation
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      const panelId = t.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+      if (!panelId) return;
+      if (panelId === 'eq-panel-0' && _data) drawMainEquity(_data);
+    });
+  });
+  // Draw main chart now
+  if (_data) {
+    if (_data.mode === 'portfolio') drawPortfolioEquity(_data);
+    else drawMainEquity(_data);
+
+    // Defer WF and MC charts until tab shown, but draw immediately too
+    if (_data.walk_forward) {
+      requestAnimationFrame(() => drawWFEquity(_data));
+    }
+    if (_data.monte_carlo) {
+      requestAnimationFrame(() => drawMCEquity(_data));
+    }
+    if (_data.mode === 'portfolio') {
+      requestAnimationFrame(() => drawPairEquity(_data));
+    }
+  }
+}
+
+function switchTab(tabEl, panelId) {
+  const section = tabEl.closest('.section');
+  section.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  section.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.getElementById(panelId)?.classList.add('active');
+  // Re-draw charts when tab becomes visible (canvas size may have changed)
+  if (!_data) return;
+  requestAnimationFrame(() => {
+    if (panelId.includes('0') && _data.mode !== 'portfolio') drawMainEquity(_data);
+    if (panelId.includes('0') && _data.mode === 'portfolio') drawPortfolioEquity(_data);
+    if (panelId === 'eq-panel-1' && _data.walk_forward) drawWFEquity(_data);
+    const panels = document.querySelectorAll('.tab-panel');
+    panels.forEach((p, i) => {
+      if (p.id === panelId) {
+        if (_data.monte_carlo && document.getElementById('equity-canvas-mc')?.closest('.tab-panel') === p)
+          drawMCEquity(_data);
+        if (_data.mode === 'portfolio' && document.getElementById('equity-canvas-pair')?.closest('.tab-panel') === p)
+          drawPairEquity(_data);
+      }
+    });
+  });
+}
+
+// ── Walk-forward section ──────────────────────────────────────────────────────
+function renderWalkForward(wf) {
+  const is  = wf.in_sample;
+  const oos = wf.out_of_sample;
+  const splitDate = wf.split_ts ? ts2date(wf.split_ts) : '—';
+  return `<div class="section">
+    <div class="section-header"><div class="section-header-left">🔀 Walk-Forward Validation (${wf.split_pct||70}/${100-(wf.split_pct||70)} split — ${splitDate})</div></div>
+    <div class="section-body">
+      <div class="wf-grid">
+        <div class="wf-panel">
+          <h3 class="is">📘 In-Sample (training)</h3>
+          ${wfRow('Trades',        is.trades)}
+          ${wfRow('Win Rate',      pct(is.win_rate))}
+          ${wfRow('Total P&L',     fmt(is.total_pnl,'$'), is.total_pnl)}
+          ${wfRow('Max Drawdown',  fmt(-(is.max_drawdown||0),'$'), -1)}
+          ${wfRow('Profit Factor', is.profit_factor?.toFixed(2), is.profit_factor - 1)}
+        </div>
+        <div class="wf-panel">
+          <h3 class="oos">📙 Out-of-Sample (live test)</h3>
+          ${wfRow('Trades',        oos.trades)}
+          ${wfRow('Win Rate',      pct(oos.win_rate))}
+          ${wfRow('Total P&L',     fmt(oos.total_pnl,'$'), oos.total_pnl)}
+          ${wfRow('Max Drawdown',  fmt(-(oos.max_drawdown||0),'$'), -1)}
+          ${wfRow('Profit Factor', oos.profit_factor?.toFixed(2), oos.profit_factor - 1)}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function wfRow(label, value, sign) {
+  const cls = sign == null ? '' : (sign >= 0 ? 'pos' : 'neg');
+  return `<div class="wf-stat"><span class="k">${label}</span><span class="${cls}">${value ?? '—'}</span></div>`;
+}
+
+// ── Monte Carlo section ────────────────────────────────────────────────────────
+function renderMonteCarlo(mc) {
+  return `<div class="section">
+    <div class="section-header"><div class="section-header-left">🎲 Monte Carlo Simulation (${mc.iterations.toLocaleString()} shuffles)</div></div>
+    <div class="section-body">
+      <div class="mc-stats">
+        <div class="mc-stat">
+          <div class="label">5th Pct (worst)</div>
+          <div class="value ${mc.final_p5>=0?'pos':'neg'}">${fmt(mc.final_p5,'$')}</div>
+        </div>
+        <div class="mc-stat">
+          <div class="label">Median (p50)</div>
+          <div class="value ${mc.final_p50>=0?'pos':'neg'}">${fmt(mc.final_p50,'$')}</div>
+        </div>
+        <div class="mc-stat">
+          <div class="label">95th Pct (best)</div>
+          <div class="value ${mc.final_p95>=0?'pos':'neg'}">${fmt(mc.final_p95,'$')}</div>
+        </div>
+        <div class="mc-stat">
+          <div class="label">P(Positive)</div>
+          <div class="value ${mc.prob_positive>=50?'pos':'neg'}">${mc.prob_positive}%</div>
+        </div>
+      </div>
+      <p style="color:var(--text2);font-size:12px">
+        Trade PnL values shuffled ${mc.iterations.toLocaleString()}× — tests whether
+        edge comes from skill or just favourable trade ordering.
+        See the Monte Carlo tab above for the equity band chart.
+      </p>
+    </div>
+  </div>`;
+}
+
+// ── Per-pair section (portfolio mode) ─────────────────────────────────────────
+function renderPerPair(d) {
+  const pp  = d.per_pair || {};
+  const syms = Object.keys(pp);
+  const cards = syms.map((sym, i) => {
+    const r = pp[sym];
+    const col = PAIR_COLORS[sym] || FALLBACK_COLORS[i % FALLBACK_COLORS.length];
+    return `<div class="pair-card">
+      <div class="pair-name" style="color:${col}">${sym}</div>
+      ${pairRow('Trades',       r.total_trades)}
+      ${pairRow('Win Rate',     pct(r.win_rate),        r.win_rate - 50)}
+      ${pairRow('Total P&L',    fmt(r.total_pnl,'$'),   r.total_pnl)}
+      ${pairRow('Max Drawdown', fmt(-(r.max_drawdown||0),'$'), -1)}
+      ${pairRow('Profit Factor',r.profit_factor?.toFixed(2), r.profit_factor - 1)}
+    </div>`;
+  });
+  return `<div class="section">
+    <div class="section-header"><div class="section-header-left">🌐 Per-Pair Breakdown</div></div>
+    <div class="section-body">
+      <div class="pair-grid">${cards.join('')}</div>
+    </div>
+  </div>`;
+}
+function pairRow(label, value, sign) {
+  const cls = sign == null ? '' : (sign >= 0 ? 'pos' : 'neg');
+  return `<div class="pair-stat"><span class="pk">${label}</span><span class="${cls}">${value ?? '—'}</span></div>`;
+}
+
+// ── Per-strategy section ──────────────────────────────────────────────────────
+function renderPerStrategy(d) {
+  // BUG FIX (B-STRAT-KEY): Engine produces "by_strategy" (not "strategy_stats").
+  // The old key caused the per-strategy breakdown to always render empty cards.
+  const ss = d.by_strategy || d.strategy_stats || {};
+  const cards = Object.entries(ss).map(([code, s]) => {
+    const isSW = code.startsWith('SW');
+    const wr   = s.win_rate || 0;
+    return `<div class="strat-card">
+      <div class="code ${isSW?'strat-badge sw':'strat-badge'}">${code}</div>
+      <div class="metrics" style="margin-top:10px">
+        <div><div class="m-label">Trades</div><div class="m-value">${s.trades}</div></div>
+        <div><div class="m-label">Win%</div><div class="m-value ${wr>=50?'pos':'neg'}">${wr.toFixed(0)}%</div></div>
+        <div><div class="m-label">P&L</div><div class="m-value ${s.total_pnl>=0?'pos':'neg'}">${fmt(s.total_pnl,'$')}</div></div>
+        <div><div class="m-label">Avg RR</div><div class="m-value">${(s.avg_rr||0).toFixed(2)}</div></div>
+      </div>
+      <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(wr,100)}%;background:${wr>=50?'var(--green)':'var(--red)'}"></div></div>
+    </div>`;
+  });
+  return `<div class="section">
+    <div class="section-header"><div class="section-header-left">🎯 Per-Strategy Breakdown</div></div>
+    <div class="section-body">
+      <div class="per-strat-grid">${cards.join('')||'<div style="color:var(--text2)">No data</div>'}</div>
+    </div>
+  </div>`;
+}
+
+// ── Trade log section ─────────────────────────────────────────────────────────
+function renderTradeSection(d) {
+  const isPort = d.mode === 'portfolio';
+  const symOpts = isPort ? (d.symbols||[]).map(s=>`<option>${s}</option>`).join('') : '';
+  return `<div class="section">
+    <div class="section-header"><div class="section-header-left">📋 Trade Log</div></div>
+    <div class="section-body">
+      <div class="filter-bar">
+        ${isPort ? `<label>Symbol:</label><select id="f-sym" onchange="applyFilters()"><option value="">All</option>${symOpts}</select>` : ''}
+        <label>Strategy:</label>
+        <select id="f-strat" onchange="applyFilters()">
+          <option value="">All</option>
+          ${(d.strategies||[]).map(s=>`<option>${s}</option>`).join('')}
+        </select>
+        <label>Result:</label>
+        <select id="f-result" onchange="applyFilters()">
+          <option value="">All</option>
+          <option>TP</option><option>SL</option><option>OPEN_AT_END</option>
+        </select>
+        <label>Type:</label>
+        <select id="f-type" onchange="applyFilters()">
+          <option value="">All</option>
+          <option>BUY</option><option>SELL</option>
+        </select>
+        <button onclick="resetFilters()">Reset</button>
+        <span id="f-count" style="margin-left:auto;color:var(--text2);font-size:12px"></span>
+      </div>
+      <div id="trade-table-wrap"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>`;
+}
+
+function applyFilters() {
+  if (!_data) return;
+  const sym    = document.getElementById('f-sym')?.value    || '';
+  const strat  = document.getElementById('f-strat')?.value  || '';
+  const result = document.getElementById('f-result')?.value || '';
+  const type   = document.getElementById('f-type')?.value   || '';
+  _filteredTrades = (_data.trades || []).filter(t => {
+    if (sym    && t.symbol   !== sym)    return false;
+    if (strat  && t.strategy !== strat)  return false;
+    if (result && t.result   !== result) return false;
+    if (type   && t.type     !== type)   return false;
+    return true;
+  });
+  _page = 1;
+  renderTradePage();
+}
+function resetFilters() {
+  ['f-sym','f-strat','f-result','f-type'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  applyFilters();
+}
+function buildTradeTable(trades) { _filteredTrades = trades; renderTradePage(); }
+function renderTradePage() {
+  const total  = _filteredTrades.length;
+  const pages  = Math.ceil(total / PAGE_SIZE);
+  const start  = (_page - 1) * PAGE_SIZE;
+  const slice  = _filteredTrades.slice(start, start + PAGE_SIZE);
+  const isPort = _data?.mode === 'portfolio';
+
+  document.getElementById('f-count').textContent = `${total} trade${total!==1?'s':''}`;
+
+  const rows = slice.map(t => {
+    const pnl    = t.pnl || 0;
+    const res    = t.result || '?';
+    const resCls = res==='TP'?'tp':res==='SL'?'sl':'open';
+    const typCls = t.type==='BUY'?'buy':'sell';
+    const symCol = isPort ? `<td style="color:${PAIR_COLORS[t.symbol]||'var(--text2)'};">${t.symbol||'—'}</td>` : '';
+    return `<tr>
+      <td>${ts2date(t.entry_ts)}</td>
+      ${symCol}
+      <td><span class="strat-badge ${t.strategy?.startsWith('SW')?'sw':''}">${t.strategy}</span></td>
+      <td><span class="tag ${typCls}">${t.type}</span></td>
+      <td>${(t.entry||0).toFixed(5)}</td>
+      <td>${(t.sl||0).toFixed(5)}</td>
+      <td>${(t.tp||0).toFixed(5)}</td>
+      <td>${(t.exit_price||0).toFixed(5)}</td>
+      <td>${(t.rr||0).toFixed(2)}</td>
+      <td class="${pnl>=0?'pos':'neg'}">${fmt(pnl,'$')}</td>
+      <td><span class="tag ${resCls}">${res}</span></td>
+      <td style="color:var(--text2);font-size:11px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(t.reason||'').replace(/"/g,"'")}">${(t.reason||'').slice(0,60)}</td>
+    </tr>`;
+  });
+
+  const symTH = isPort ? '<th>Pair</th>' : '';
+  document.getElementById('trade-table-wrap').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Date</th>${symTH}<th>Strategy</th><th>Type</th>
+        <th>Entry</th><th>SL</th><th>TP</th><th>Exit</th>
+        <th>R:R</th><th>P&L</th><th>Result</th><th>Reason</th>
+      </tr></thead>
+      <tbody>${rows.join('')||'<tr><td colspan="12" style="text-align:center;color:var(--text2);padding:30px">No trades match filters</td></tr>'}</tbody>
+    </table>`;
+
+  const pEl = document.getElementById('pagination');
+  if (pages <= 1) { pEl.innerHTML = ''; return; }
+  let btns = '';
+  btns += `<button onclick="goPage(${_page-1})" ${_page===1?'disabled':''}>‹ Prev</button>`;
+  const lo = Math.max(1, _page-2), hi = Math.min(pages, _page+2);
+  for (let i=lo; i<=hi; i++) btns += `<button class="${i===_page?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  btns += `<button onclick="goPage(${_page+1})" ${_page===pages?'disabled':''}>Next ›</button>`;
+  btns += `<span>${_page} / ${pages}</span>`;
+  pEl.innerHTML = btns;
+}
+function goPage(p) {
+  const pages = Math.ceil(_filteredTrades.length / PAGE_SIZE);
+  _page = Math.max(1, Math.min(p, pages));
+  renderTradePage();
+}
+
+// ── Canvas drawing helpers ────────────────────────────────────────────────────
+function setupCanvas(id) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return null;
+  const W = Math.max(400, (canvas.parentElement?.offsetWidth || 800) - 40);
+  const H = 280;
+  canvas.width  = W;
+  canvas.height = H;
+  return { canvas, ctx: canvas.getContext('2d'), W, H,
+           pad: { top: 20, right: 20, bottom: 30, left: 64 } };
+}
+
+function drawGrid(ctx, W, H, pad, minV, maxV, range) {
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 1;
+  for (let g = 0; g <= 4; g++) {
+    const y   = pad.top + (g / 4) * (H - pad.top - pad.bottom);
+    const val = maxV - (g / 4) * range;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#8b949e'; ctx.font = '11px monospace'; ctx.textAlign = 'right';
+    ctx.fillText('$' + val.toFixed(1), pad.left - 4, y + 4);
+  }
+}
+
+function drawZeroLine(ctx, W, H, pad, toY) {
+  ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+  const y = toY(0);
+  ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawDateLabels(ctx, curve, pad, W, H, toX) {
+  ctx.fillStyle = '#8b949e'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  const steps = Math.min(6, curve.length);
+  if (steps < 2) return;
+  for (let s = 0; s < steps; s++) {
+    const idx = Math.floor(s / (steps - 1) * (curve.length - 1));
+    ctx.fillText(ts2month(curve[idx][0]), toX(idx), H - pad.bottom + 16);
+  }
+}
+
+function drawCurveFill(ctx, curve, toX, toY, colour) {
+  const grad = ctx.createLinearGradient(0, 0, 0, 280);
+  grad.addColorStop(0, colour + '4d');
+  grad.addColorStop(1, colour + '00');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(0));
+  curve.forEach((c, i) => ctx.lineTo(toX(i), toY(c[1])));
+  ctx.lineTo(toX(curve.length - 1), toY(0));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawLine(ctx, curve, toX, toY, colour, width=2, dash=[]) {
+  ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.setLineDash(dash);
+  ctx.beginPath();
+  curve.forEach((c, i) => i === 0 ? ctx.moveTo(toX(i), toY(c[1])) : ctx.lineTo(toX(i), toY(c[1])));
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ── Full-run equity chart ─────────────────────────────────────────────────────
+function drawMainEquity(d) {
+  const curve = d.equity_curve || [];
+  const wf    = d.walk_forward;
+  const r = setupCanvas('equity-canvas-full');
+  if (!r || !curve.length) return;
+  const { ctx, W, H, pad } = r;
+
+  const values = curve.map(c => c[1]);
+  const minV   = Math.min(...values, 0);
+  const maxV   = Math.max(...values, 0);
+  const range  = maxV - minV || 1;
+  const toX    = i => pad.left + (i / (curve.length - 1)) * (W - pad.left - pad.right);
+  const toY    = v => pad.top  + (1 - (v - minV) / range) * (H - pad.top - pad.bottom);
+
+  drawGrid(ctx, W, H, pad, minV, maxV, range);
+  drawZeroLine(ctx, W, H, pad, toY);
+
+  // Walk-forward split line
+  if (wf && wf.split_ts) {
+    const splitIdx = curve.findIndex(c => c[0] >= wf.split_ts);
+    if (splitIdx > 0) {
+      const sx = toX(splitIdx);
+      ctx.strokeStyle = '#d29922'; ctx.lineWidth = 1; ctx.setLineDash([6, 3]);
+      ctx.beginPath(); ctx.moveTo(sx, pad.top); ctx.lineTo(sx, H - pad.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#d29922'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('WF split', sx, pad.top - 6);
+    }
+  }
+
+  drawCurveFill(ctx, curve, toX, toY, '#3fb950');
+  drawLine(ctx, curve, toX, toY, '#3fb950', 2);
+  drawDateLabels(ctx, curve, pad, W, H, toX);
+
+  // Legend
+  const leg = document.getElementById('eq-legend-0');
+  if (leg) {
+    leg.innerHTML = `
+      <div class="legend-item"><div class="legend-swatch" style="background:#3fb950"></div>Equity curve</div>
+      ${wf ? '<div class="legend-item"><div class="legend-swatch" style="background:#d29922;height:0;border-top:1px dashed #d29922"></div>WF split</div>' : ''}
+    `;
+  }
+}
+
+// ── Walk-forward equity chart ─────────────────────────────────────────────────
+function drawWFEquity(d) {
+  const wf = d.walk_forward;
+  if (!wf) return;
+  const isC  = wf.in_sample?.equity_curve  || [];
+  const oosC = wf.out_of_sample?.equity_curve || [];
+  if (!isC.length && !oosC.length) return;
+
+  const r = setupCanvas('equity-canvas-wf');
+  if (!r) return;
+  const { ctx, W, H, pad } = r;
+
+  const allVals = [...isC.map(c=>c[1]), ...oosC.map(c=>c[1]), 0];
+  const minV    = Math.min(...allVals);
+  const maxV    = Math.max(...allVals);
+  const range   = maxV - minV || 1;
+  const total   = isC.length + oosC.length;
+  const toXi    = (i, offset=0) => pad.left + ((i + offset) / (total - 1)) * (W - pad.left - pad.right);
+  const toY     = v => pad.top + (1 - (v - minV) / range) * (H - pad.top - pad.bottom);
+
+  drawGrid(ctx, W, H, pad, minV, maxV, range);
+  drawZeroLine(ctx, W, H, pad, toY);
+
+  // IS curve
+  if (isC.length) {
+    const toX = i => toXi(i, 0);
+    drawCurveFill(ctx, isC, toX, toY, '#58a6ff');
+    drawLine(ctx, isC, toX, toY, '#58a6ff', 2);
+  }
+  // OOS curve (continues from where IS ended)
+  if (oosC.length) {
+    const offset = isC.length;
+    const toX = i => toXi(i, offset);
+    drawCurveFill(ctx, oosC, toX, toY, '#bc8cff');
+    drawLine(ctx, oosC, toX, toY, '#bc8cff', 2);
+  }
+
+  // Split line
+  if (isC.length) {
+    const sx = toXi(isC.length - 1, 0);
+    ctx.strokeStyle = '#d29922'; ctx.lineWidth = 1; ctx.setLineDash([6, 3]);
+    ctx.beginPath(); ctx.moveTo(sx, pad.top); ctx.lineTo(sx, H - pad.bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#d29922'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('▼ OOS start', sx, pad.top - 4);
+  }
+
+  // Date labels
+  const merged = [...isC, ...oosC];
+  const steps  = Math.min(6, merged.length);
+  ctx.fillStyle = '#8b949e'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  for (let s = 0; s < steps; s++) {
+    const idx = Math.floor(s / (steps - 1) * (merged.length - 1));
+    const x   = toXi(idx, 0);
+    ctx.fillText(ts2month(merged[idx][0]), x, H - pad.bottom + 16);
+  }
+}
+
+// ── Monte Carlo equity chart ──────────────────────────────────────────────────
+function drawMCEquity(d) {
+  const mc    = d.monte_carlo;
+  const curve = d.equity_curve || [];
+  if (!mc || !mc.p5.length) return;
+
+  const r = setupCanvas('equity-canvas-mc');
+  if (!r) return;
+  const { ctx, W, H, pad } = r;
+  const n = mc.p5.length;
+
+  const allVals = [...mc.p5, ...mc.p95, ...curve.slice(-n).map(c=>c[1]), 0];
+  const minV    = Math.min(...allVals);
+  const maxV    = Math.max(...allVals);
+  const range   = maxV - minV || 1;
+  const toX     = i => pad.left + (i / (n - 1)) * (W - pad.left - pad.right);
+  const toY     = v => pad.top  + (1 - (v - minV) / range) * (H - pad.top - pad.bottom);
+
+  drawGrid(ctx, W, H, pad, minV, maxV, range);
+  drawZeroLine(ctx, W, H, pad, toY);
+
+  // p5-p95 shaded band
+  ctx.fillStyle = 'rgba(88,166,255,0.08)';
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) ctx.lineTo(toX(i), toY(mc.p95[i]));
+  for (let i = n - 1; i >= 0; i--) ctx.lineTo(toX(i), toY(mc.p5[i]));
+  ctx.closePath(); ctx.fill();
+
+  // p5 line
+  ctx.strokeStyle = '#f85149'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath();
+  mc.p5.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
+  ctx.stroke();
+
+  // p95 line
+  ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath();
+  mc.p95.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
+  ctx.stroke(); ctx.setLineDash([]);
+
+  // p50 solid line
+  ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  mc.p50.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
+  ctx.stroke();
+
+  // Actual equity (last n bars)
+  const actSlice = curve.length >= n ? curve.slice(curve.length - n) : curve;
+  if (actSlice.length > 1) {
+    ctx.strokeStyle = '#d29922'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    actSlice.forEach((c, i) => {
+      const x = toX(i * (n - 1) / Math.max(actSlice.length - 1, 1));
+      i === 0 ? ctx.moveTo(x, toY(c[1])) : ctx.lineTo(x, toY(c[1]));
+    });
+    ctx.stroke();
+  }
+
+  const leg = document.getElementById('mc-legend');
+  if (leg) {
+    leg.innerHTML = `
+      <div class="legend-item"><div class="legend-swatch" style="background:#3fb950"></div>p95 (best 5%)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#58a6ff"></div>p50 median</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#f85149"></div>p5 (worst 5%)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:rgba(88,166,255,0.3)"></div>5–95% band</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#d29922"></div>Actual equity</div>
+    `;
+  }
+
+  ctx.fillStyle = '#8b949e'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText(`Trade sequence`, toX(Math.floor(n/2)), H - pad.bottom + 16);
+}
+
+// ── Portfolio: single combined chart ─────────────────────────────────────────
+function drawPortfolioEquity(d) {
+  const pp = d.per_pair || {};
+  const r  = setupCanvas('equity-canvas-full');
+  if (!r) return;
+  const { ctx, W, H, pad } = r;
+  const syms = Object.keys(pp);
+  if (!syms.length) return;
+
+  // Compute combined equity from all trades sorted by timestamp
+  const allTrades = (d.trades || [])
+    .filter(t => t.exit_ts)
+    .sort((a, b) => (a.exit_ts||0) - (b.exit_ts||0));
+
+  let cum = 0;
+  const combined = allTrades.map(t => { cum += (t.pnl||0); return [t.exit_ts, round2(cum)]; });
+
+  const allVals = [0, ...combined.map(c=>c[1])];
+  const minV    = Math.min(...allVals);
+  const maxV    = Math.max(...allVals);
+  const range   = maxV - minV || 1;
+  const n       = combined.length || 1;
+  const toX     = i => pad.left + (i / Math.max(n-1,1)) * (W - pad.left - pad.right);
+  const toY     = v => pad.top  + (1 - (v - minV) / range) * (H - pad.top - pad.bottom);
+
+  drawGrid(ctx, W, H, pad, minV, maxV, range);
+  drawZeroLine(ctx, W, H, pad, toY);
+
+  if (combined.length > 1) {
+    drawCurveFill(ctx, combined, toX, toY, '#58a6ff');
+    drawLine(ctx, combined, toX, toY, '#58a6ff', 2);
+    drawDateLabels(ctx, combined, pad, W, H, toX);
+  }
+
+  const leg = document.getElementById('eq-legend-0');
+  if (leg) {
+    leg.innerHTML = `<div class="legend-item"><div class="legend-swatch" style="background:#58a6ff"></div>Portfolio combined</div>`;
+  }
+}
+
+// ── Per-pair equity chart ─────────────────────────────────────────────────────
+function drawPairEquity(d) {
+  const pp   = d.per_pair || {};
+  const syms = Object.keys(pp);
+  const r    = setupCanvas('equity-canvas-pair');
+  if (!r || !syms.length) return;
+  const { ctx, W, H, pad } = r;
+
+  // Find global min/max across all pair curves
+  let allVals = [0];
+  syms.forEach(sym => { (pp[sym].equity_curve||[]).forEach(c => allVals.push(c[1])); });
+  const minV  = Math.min(...allVals);
+  const maxV  = Math.max(...allVals);
+  const range = maxV - minV || 1;
+
+  // Normalize all curves to the longest length (index-based)
+  const maxLen = Math.max(...syms.map(s => (pp[s].equity_curve||[]).length), 1);
+  const toX    = i => pad.left + (i / (maxLen - 1)) * (W - pad.left - pad.right);
+  const toY    = v => pad.top  + (1 - (v - minV) / range) * (H - pad.top - pad.bottom);
+
+  drawGrid(ctx, W, H, pad, minV, maxV, range);
+  drawZeroLine(ctx, W, H, pad, toY);
+
+  syms.forEach((sym, idx) => {
+    const curve = pp[sym].equity_curve || [];
+    if (!curve.length) return;
+    const col = PAIR_COLORS[sym] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+    // Scale this pair's x to the global index space
+    const toXs = i => pad.left + (i / (curve.length - 1)) * (W - pad.left - pad.right);
+    drawLine(ctx, curve, toXs, toY, col, 1.5);
+  });
+
+  // Date labels from first pair
+  const firstCurve = pp[syms[0]]?.equity_curve || [];
+  if (firstCurve.length) drawDateLabels(ctx, firstCurve, pad, W, H, toX);
+
+  const leg = document.getElementById('pair-legend');
+  if (leg) {
+    leg.innerHTML = syms.map((sym, i) => {
+      const col = PAIR_COLORS[sym] || FALLBACK_COLORS[i % FALLBACK_COLORS.length];
+      return `<div class="legend-item"><div class="legend-swatch" style="background:${col}"></div>${sym}</div>`;
+    }).join('');
+  }
+}
+
+function round2(v) { return Math.round(v * 100) / 100; }
+</script>
+</body>
+</html>

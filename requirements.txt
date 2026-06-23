@@ -1,0 +1,20 @@
+# struct-ai-backtest requirements
+# Install with:  pip install -r requirements.txt
+# Or just run:   install.bat
+
+# Core data & analysis
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Market data download (Yahoo Finance — works out of the box)
+yfinance>=0.2.36
+
+# MetaTrader5 data source (Windows only — gives full 1-year 5M history)
+# Requires MT5 terminal to be running and logged in.
+# If MT5 is not installed just leave this — the installer skips it gracefully.
+MetaTrader5>=5.0.45
+
+# Web dashboard (local UI — start_dashboard.bat)
+flask>=2.3.0
+
+# SQLite is built into Python — no extra package needed
