@@ -418,6 +418,13 @@ def check(state: dict, debug: bool = False) -> dict | None:
     else:
         if debug: print("    [S4] skip: no clear HTF bias or 4H/1H conflict")
         return None
+    
+    # ── D1 macro filter — don't trade compression breakouts against the daily trend ──
+    b_d1 = bias.get("d1", "neutral")
+    if b_d1 != "neutral" and b_d1 != htf_direction:
+        if debug: print(f"    [S4] skip: D1 {b_d1} opposes {htf_direction} — macro trend filter")
+        return None
+
 
     # ── Step 3: Compression detection (FIX 5: 15-candle baseline) ─────────
     candles_5m = s5m.get("candles", [])
