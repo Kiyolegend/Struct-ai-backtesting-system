@@ -259,11 +259,7 @@ def check(state: dict, debug: bool = False) -> dict | None:
         if debug: print("    [S2] skip: strongly trending market — use S1")
         return None
 
-    # ── D1 macro filter — only trade with the daily trend ────────────────
-    b_d1 = bias.get("d1", "neutral")
-    market_score = 15 if not slightly_trending else 5
-
-    market_score = 15 if not slightly_trending else 5
+    
 
     # ── Step 2: Sweep detection on 15M ───────────────────────────────────
     CHOCH_SWEEP_MAX_AGE = 6 * 3600
@@ -313,27 +309,25 @@ def check(state: dict, debug: bool = False) -> dict | None:
         return base_recovery if score == 25 else bos_recovery
 
     if buy_sweep_price is not None:
-        if b_d1 != "bearish":
-            rec = _min_recovery(buy_sweep_score)
-            if (price - buy_sweep_price) >= rec:
-                direction      = "bullish"
-                trade_type     = "BUY"
-                sweep_score    = buy_sweep_score
-                sweep_level    = buy_sweep_price
-                sweep_item     = buy_sweep_item
-                is_choch_sweep = (buy_sweep_score == 25)
+        rec = _min_recovery(buy_sweep_score)
+        if (price - buy_sweep_price) >= rec:
+            direction      = "bullish"
+            trade_type     = "BUY"
+            sweep_score    = buy_sweep_score
+            sweep_level    = buy_sweep_price
+            sweep_item     = buy_sweep_item
+            is_choch_sweep = (buy_sweep_score == 25)
 
     if sell_sweep_price is not None:
-        if b_d1 != "bullish":
-            rec = _min_recovery(sell_sweep_score)
-            if (sell_sweep_price - price) >= rec:
-                if direction is None or sell_sweep_score >= sweep_score:
-                    direction      = "bearish"
-                    trade_type     = "SELL"
-                    sweep_score    = sell_sweep_score
-                    sweep_level    = sell_sweep_price
-                    sweep_item     = sell_sweep_item
-                    is_choch_sweep = (sell_sweep_score == 25)
+        rec = _min_recovery(sell_sweep_score)
+        if (sell_sweep_price - price) >= rec:
+            if direction is None or sell_sweep_score >= sweep_score:
+                direction      = "bearish"
+                trade_type     = "SELL"
+                sweep_score    = sell_sweep_score
+                sweep_level    = sell_sweep_price
+                sweep_item     = sell_sweep_item
+                is_choch_sweep = (sell_sweep_score == 25)
 
     if direction is None:
         if debug: print("    [S2] skip: no valid sweep with sufficient recovery")

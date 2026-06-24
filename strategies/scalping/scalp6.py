@@ -361,11 +361,7 @@ def check(state: dict, debug: bool = False) -> dict | None:
         if debug: print("    [S6] skip: 4H bullish — cannot sell at Asian high against HTF trend")
         return None
     
-    # ── D1 macro filter ───────────────────────────────────────────────────
-    b_d1 = bias.get("d1", "neutral")
-    if b_d1 != "neutral" and b_d1 != direction:
-        if debug: print(f"    [S6] skip: D1 {b_d1} opposes {direction} — macro trend filter")
-        return None
+    
 
     # ── Gate 7: 1H alignment ─────────────────────────────────────────────
     if direction == "bullish" and b1h == "bearish":

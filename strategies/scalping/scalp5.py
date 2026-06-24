@@ -336,11 +336,7 @@ def check(state: dict, debug: bool = False) -> dict | None:
     trade_type = "BUY" if direction == "bullish" else "SELL"
     bias_score = 20
 
-    # ── D1 macro filter — skip if daily trend opposes session direction ───
-    b_d1 = bias.get("d1", "neutral")
-    if b_d1 != "neutral" and b_d1 != direction:
-        if debug: print(f"    [S5] skip: D1 {b_d1} opposes {direction} — macro trend filter")
-        return None
+    
 
     # Reject if 4H is actively opposing (not just non-aligning)
     if b4h != "neutral" and b4h != direction:

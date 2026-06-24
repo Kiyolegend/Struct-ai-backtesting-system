@@ -301,11 +301,7 @@ def check(state: dict, debug: bool = False) -> dict | None:
 
     trade_type = "BUY" if direction == "bullish" else "SELL"
     
-    # ── D1 macro filter ───────────────────────────────────────────────────
-    b_d1 = bias.get("d1", "neutral")
-    if b_d1 != "neutral" and b_d1 != direction:
-        if debug: print(f"    [S3] skip: D1 {b_d1} opposes {direction} — macro trend filter")
-        return None
+    
     
     symbol     = state.get("symbol", "")
     pip        = config.get_symbol_cfg(symbol)["pip_size"]
