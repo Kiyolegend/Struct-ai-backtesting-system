@@ -385,7 +385,7 @@ def _calc_asia_range(df_1h: Optional[pd.DataFrame],
 def calc_pnl(trade: dict, exit_price: float, symbol: str, lot_size: float) -> float:
     cfg          = bt_config.get_symbol_cfg(symbol)
     pip          = cfg["pip_size"]
-    pip_val      = cfg["pip_value_per_lot"] * lot_size
+    pip_val = (lot_size * 100_000 * pip / exit_price) if "JPY" in symbol else (lot_size * 100_000 * pip)
     total_cost_p = bt_config.get_total_cost_pips(symbol)
 
     if trade["type"] == "BUY":

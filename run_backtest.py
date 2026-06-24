@@ -126,7 +126,7 @@ def run_collector(source: str = "auto", refresh: bool = False):
 
 def save_results(results: dict, label: str) -> str:
     os.makedirs(os.path.join(ROOT, "results"), exist_ok=True)
-    ts_str = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
     fname  = f"{label}_{ts_str}.json"
     fpath  = os.path.join(ROOT, "results", fname)
 
